@@ -1,0 +1,93 @@
+<apex:page controller="MitsumoriListController" action="{!init}" sidebar="false" Id="MitsumoriList" >
+<apex:form id="form1">
+    <apex:pageBlock title="見積検索">
+        <apex:pageMessages id="messagearea" showDetail="false"/>
+        <apex:pageblockSection id="conditionSection" title="検索条件" columns="1">
+            <apex:outputpanel id="searchcondition">
+                <table id="conditionTable">
+                    <tr>
+                        <td class="label"><apex:outputLabel value="見積年月："  styleClass="labelCol" /></td>
+                        <td>
+                            <apex:selectList style="width:70px" value="{!condition.year}" multiselect="false" size="1">
+                                <apex:selectOptions value="{!condition.targetYears}">
+								</apex:selectOptions>
+                            </apex:selectList>
+                            <apex:outputLabel value=" 年　"  styleClass="labelCol" />
+                            <apex:selectList style="width:50px" value="{!condition.month}" multiselect="false" size="1">
+                                <apex:selectOptions value="{!condition.targetMonths}">
+								</apex:selectOptions>
+                            </apex:selectList>
+                            <apex:outputLabel value=" 月　"  styleClass="labelCol" />
+                        </td>
+                    </tr>
+                </table>
+            </apex:outputpanel>
+        </apex:pageblockSection>
+        <apex:pageBlockButtons id="buttonSection" location="bottom" >
+            <apex:commandButton value="検索" action="{!search}" style="font-size:12pt;width:100px;height:30px;" reRender="searchresult,messagearea"/>
+            <apex:commandButton value="見積作成" action="{!createMitumori}" style="font-size:12pt;width:100px;height:30px;" reRender="messagearea"/>
+        </apex:pageBlockButtons>
+    </apex:pageBlock>
+</apex:form>
+<apex:outputpanel id="searchresult">
+    <apex:pageBlock title="検索結果" rendered="{!(results.size == 0) && !NOT(displayCheck)}">
+         検索結果は0件です。
+    </apex:pageBlock>
+    <apex:form id="resultForm">
+        <apex:actionFunction name="deleteBtnFunction" action="{!deleteItem}" rerender="searchresult">
+            <apex:param name="name" value=""/>
+        </apex:actionFunction>
+        <apex:pageBlock id="resultBlock" title="見積一覧" rendered="{!(results.size > 0)}">
+            <apex:outputtext style="width:110px" value="結果 : {!results.size}件"/>
+            <!-- インデックス取得用の変数 ここで使わないですが、例としてあえて置く-->
+            <apex:variable value="{!0}" var="count"/>
+            <apex:pageblockTable id="resultTable" value="{!results}" var="o" frame="box" rowClasses="odd,even" >
+                <apex:column style="width:80px">
+                    <apex:facet name="header">
+                        <apex:outputLabel > </apex:outputLabel>
+                    </apex:facet>
+                    <apex:commandButton value="詳細" immediate="true" action="{!detailItem}" reRender="searchresult,messagearea">
+                        <apex:param name="tgId" value="{!o.Id}" />
+                    </apex:commandButton>
+                    <apex:commandButton value="削除" immediate="true" onClick="return deleteBtnClick({!o.name})"/>
+                    <!-- <apex:commandButton value="削除" immediate="true" style="font-size:12pt;width:60px;height:30px;" onClick="return deleteBtnClick({!count})"/>-->
+                    <!-- ループするごとに+1 -->
+                    <apex:variable value="{!count + 1}" var="count"/>
+                </apex:column>
+                <apex:column style="width:160px">
+                    <apex:facet name="header">
+                        <apex:outputLabel >顧客名</apex:outputLabel>
+                    </apex:facet>
+                    <apex:outputField style="width:150px" value="{!o.Account__c}"/>
+                </apex:column>
+                <apex:column style="width:160px">
+                    <apex:facet name="header">
+                        <apex:outputLabel >ステータス</apex:outputLabel>
+                    </apex:facet>
+                    <apex:outputField style="width:150px" value="{!o.Status__c}"/>
+                </apex:column>
+                <apex:column style="width:160px">
+                    <apex:facet name="header">
+                        <apex:outputLabel >見積年月</apex:outputLabel>
+                    </apex:facet>
+                    <apex:outputField style="width:150px" value="{!o.MitusmoriNenGetsu__c}"/>
+                </apex:column>
+                <apex:column style="width:160px">
+                    <apex:facet name="header">
+                        <apex:outputLabel >見積有効期間</apex:outputLabel>
+                    </apex:facet>
+                    <apex:outputField style="width:150px" value="{!o.MitsumoriYukokikan__c}"/>
+                </apex:column>
+             </apex:pageblockTable>
+        </apex:pageBlock>
+    </apex:form>
+    <script>
+        function deleteBtnClick(prm) {
+            if(window.confirm('削除しますか？')) {
+                deleteBtnFunction(prm);
+            }
+            return false;
+        }
+    </script>
+</apex:outputpanel>
+</apex:page>
