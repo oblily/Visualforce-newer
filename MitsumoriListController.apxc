@@ -1,0 +1,236 @@
+public with sharing class MitsumoriListController {
+    public Boolean displayCheck { get; set; }			      // 検索一覧エリア表示コントロール
+    public SearchCondition condition{ get;set; }        // 検索条件
+    public List<Mitsumori__c> results { get;set; }      // 検索結果リスト
+
+    // 抽出対象となるフィールドリスト
+    static List<String> TARGET_FIELDS = new List<String>{
+         'Id'
+        ,'Name'
+        ,'Account__c'
+        ,'Status__c'
+        ,'MitsumoriYukokikan__c'
+        ,'MitusmoriNenGetsu__c'
+    };
+    
+    /**
+     * 初期化処理
+     */
+    public void init(){
+        this.condition = new SearchCondition();
+        this.results = new List<Mitsumori__c>();
+        this.displayCheck = false;
+    }
+
+    /**
+     * 検索ボタン処理
+     */
+    public PageReference search() {
+        // バリデーションチェック
+        if( condition.validate() ){
+            return null;
+        }
+        // 検索後、結果エリアが表示になる
+        this.displayCheck = true;
+
+        // 検索条件からSOQLを作成
+        // 初期検索で見積番号を検索条件に入れない
+        String soqlQuery = condition.getSoqlQuery(null);
+        System.debug('[soql] ' + soqlQuery);
+
+        try{
+            this.results = database.query(soqlQuery);
+        }catch(DmlException e){
+            ApexPages.addMessages(e);
+        }catch(Exception e){
+            ApexPages.addMessages(e);
+        }
+        return null;
+    }
+    
+    /**
+     * 見積作成ボタン処理
+     */
+    public PageReference createMitumori() {
+        Pagereference pr = Page.MitsumoriCreateAndDetail;
+        pr.getParameters().put('targetId', null);
+        return pr;
+    }
+    
+    /**
+     * 詳細ボタン処理
+     */
+    public PageReference detailItem() {
+        // ページ間のパラメタ引き渡す（<apex:param name="tgId" value="{!o.Id}" />）
+        String targetId = System.currentPageReference().getParameters().get('tgId');
+        System.debug('[targetId] ' + targetId);
+        if(targetId != null){
+             // 遷移先ページを指定する
+             Pagereference pr = Page.MitsumoriCreateAndDetail;
+             // 遷移先ページへ渡すパラメタ設定する
+             pr.getParameters().put('targetId', targetId);
+             return pr;
+        }
+        return null;
+    }
+    
+    /**
+     * 削除ボタン処理()
+     */
+    public PageReference deleteItem() {
+        String name = System.currentPageReference().getParameters().get('name');
+        System.debug('[name] ' + name);
+
+        List<Mitsumori__c> result = new List<Mitsumori__c>();
+        // 検索条件からSOQLを作成
+        // ※検索後結果を保持すれば、ここでのSOQL実行する必要がなくなる
+        String soqlQuery = condition.getSoqlQuery(name);
+        System.debug('[soql] ' + soqlQuery);
+
+        try{
+            if(name != null){
+                result = database.query(soqlQuery);
+        		// 削除する
+        		if( result != null){
+                    // DML削除実行
+        			delete result;
+                }
+                // リスト一覧から項目行削除
+        		//System.debug('[this.results-1] ' + this.results.size());
+        		//this.results.remove(Integer.ValueOf(name));
+                //System.debug('[this.results-2] ' + this.results.size());
+        	}
+        	// 再検索して画面刷新する。
+        	// ※：リストのみを削除して、一覧だけ刷新すればよいですが、とりあえずわざわざ再検索する。
+        	search();
+        }catch(DmlException e){
+            ApexPages.addMessages(e);
+        }catch(Exception e){
+            ApexPages.addMessages(e);
+        }
+        return null;
+    }
+    
+    /**
+     * 検索条件を管理するクラス
+     */ 
+    public Class SearchCondition {
+        /*
+         * 検索条件の入力フィールド用
+         */
+        public Mitsumori__c obj {get;set;}     
+
+        public String sortkey { get;set; }          		// ソートキー
+        public String order { get;set; }            		// ソート順
+        public String year { get;set; }             		// 検索年
+        public String month { get;set; }            		// 検索月
+        public List<selectOption> targetYears { get;set; } 	// 検索年リスト
+        public List<selectOption> targetMonths { get;set; } // 検索月リスト
+
+        public SearchCondition() {
+            this.obj = new Mitsumori__c();
+
+            // デフォルトはカスタムメタデータとカスタムラベルの値とする
+            targetYears = getMetaDataYearList();
+            targetMonths = getCustomLabelList();
+            // デフォルトはシステム年/月とする
+            Date today = Date.today();
+            String ym = today.format();
+            year = ym.split('/')[0];
+            month = ym.split('/')[1];
+            // デフォルトは最終更新日時の降順とする
+            sortkey = 'LastModifiedDate';
+            order = 'DESC';
+        }
+
+        // 検索条件のバリデーションチェック
+        public boolean validate(){
+            boolean isError = false;
+            //System.debug('[validate-year:] ' + year);
+            //System.debug('[validate-month:] ' + month);
+            if( year == null || month == null){
+                // apex:pageMessagesにメッセージを表示する
+                ApexPages.addMessage(new ApexPages.Message(ApexPages.Severity.ERROR, 'It is not allowed to null.', ''));
+            	isError = true;
+            }
+            return isError;
+        }
+
+
+        // 最終的なSOQLを生成（最大500件というのは固定）
+        public String getSoqlQuery(String index){
+            List<String> param = new String[]{ getFieldList(), getWhere(index), getOrder() };
+            return String.format('SELECT {0} FROM Mitsumori__c {1} {2} LIMIT 500', param);
+        }
+
+        /*
+         *  見積対象年リスト取得
+         *  やり方：カスタムメタデータ設定から取得
+         */
+        private List<selectOption> getMetaDataYearList(){
+            List<selectOption> setAllYears = new List<selectOption>();
+            for(customMataYear__mdt obj : [SELECT Id,targetYear__c,index__c FROM customMataYear__mdt ORDER BY index__c]){
+				setAllYears.add(new selectOption(obj.targetYear__c,obj.targetYear__c));
+			}
+            return setAllYears;
+        }
+        
+        /*
+         *  見積対象月リスト取得
+         *  やり方：カスタムラベル設定から取得
+         */
+        private List<selectOption> getCustomLabelList(){
+            List<selectOption> setAllMonths = new List<selectOption>();
+            for(String str : System.Label.customerMonth.split(',')){
+				setAllMonths.add(new selectOption(str,str));
+			}
+            return setAllMonths;
+        }
+        
+        // SELECT対象フィールド
+        private String getFieldList(){
+            return String.join(TARGET_FIELDS, ',');
+        }
+
+        // WHERE句作成
+        private String getWhere(String index){
+            List<String> param = new String[]{ };
+
+            // 見積年月
+            param.add('MitusmoriNenGetsu__c = \'' + year + month + '\'');
+            if(index != null){
+                // 見積番号
+            	param.add('Name = \'' + index + '\'');
+            }           
+            if(param.isEmpty()){
+                return '';
+            }
+            return 'WHERE ' + String.join(param, ' AND ');
+        }
+
+        // ORDERBY句作成
+        private String getOrder(){
+            List<String> param = new String[]{ sortkey, order };
+            return String.format('ORDER BY {0} {1}', param);
+        }
+
+        // sort機能は未実装
+        // ソート順を見出しに表示する記号に変換する
+        public String sortOrderToString(){
+            if(this.order == 'DESC'){
+                return '▼';
+            }
+            return '▲';
+        }
+
+        // ソート順を逆にする
+        public void setOrderReverse(){
+            if(this.order == 'DESC'){
+                this.order = 'ASC';
+            }
+            else {
+                this.order = 'DESC';
+            }
+        } 
+    }
+}
