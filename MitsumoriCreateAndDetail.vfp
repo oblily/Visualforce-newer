@@ -1,0 +1,54 @@
+<apex:page controller="MitsumoriDetailController" sidebar="true" showHeader="true" Id="MitsumoriDetail" >
+<apex:form id="form1">
+    <apex:pageBlock >
+        <apex:pageMessages id="messagearea" showDetail="false"/>
+        <apex:pageblockSection id="mitsumoriSection" columns="1">
+            <apex:outputpanel id="mitsumoriPanel">
+                <table id="mitsumoriTable">
+                    <tr>
+                        <td class="label"><apex:outputLabel value="顧客"  styleClass="labelCol" /></td>
+                        <td>
+                            <apex:inputField id="account" value="{!mitsumori.Account__c}"/>
+                        </td>
+                        <td class="label"><apex:outputLabel value="ステータス"  styleClass="labelCol" /></td>
+                    	<td>
+                            <apex:inputField id="scStatus" value="{!mitsumori.Status__c}" />
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="label"><apex:outputLabel value="見積年月"  styleClass="labelCol" /></td>
+                    	<td>
+                            <apex:inputField id="yearMonth" value="{!mitsumori.MitusmoriNenGetsu__c}" />
+                    	</td>
+                        <td class="label"><apex:outputLabel value="見積有効期間"  styleClass="labelCol" /></td>
+                    	<td>
+                            <apex:inputField id="limitPeriod" value="{!mitsumori.MitsumoriYukokikan__c}" />
+                    	</td>
+                    </tr>
+                </table>
+            </apex:outputpanel>
+        </apex:pageblockSection>
+        <apex:pageblockSection >
+            <apex:pageBlockTable value="{!mitsumoriMeisais}" var="o">
+                <apex:column headerValue="商品コード">
+                    <!-- 商品コードにすると、関連がなくなる -->
+                    <!-- <apex:inputField value="{!o.Shohin__r.ShohinCode__c}"/> -->
+                    <apex:inputField value="{!o.Shohin__c}"/>
+                </apex:column>
+                <apex:column headerValue="数量">
+                    <apex:inputField value="{!o.Suryo__c}"/>
+                </apex:column>
+                <apex:column headerValue="単価">
+                    <apex:inputField value="{!o.Tanka__c}"/>
+                </apex:column>
+                <apex:column headerValue="金額">
+                    <apex:inputField value="{!o.Kingaku__c}"/>
+                </apex:column>
+            </apex:pageBlockTable>
+        </apex:pageblockSection>
+        <!-- immediate指定すると、画面の値をsubmitにしなくなる？ -->
+        <apex:commandButton value="保存" action="{!saveItem}" reRender="messagearea"/>
+        <apex:commandButton value="一覧へ戻す" immediate="true" action="{!backToList}" reRender="messagearea"/>      
+    </apex:pageBlock>
+</apex:form>
+</apex:page>
