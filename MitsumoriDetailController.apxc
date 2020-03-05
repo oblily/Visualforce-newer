@@ -1,0 +1,227 @@
+public with sharing class MitsumoriDetailController {
+	public List<Mitsumori__c> mitsumoris { get; set; }          // 見積
+    public List<MitsumoriMeisai__c> mitsumoriMeisais {get;set;} // 見積明細リスト
+    public String mitsumoriId {set; get;}                       // 一覧画面からの値を受け取る用
+    public Boolean updateFlag {set; get;}                       // 新規作成か既存更新かフラグ
+    public Mitsumori__c mitsumori { get; set; }                 // 見積
+    
+    // 抽出対象となるフィールドリスト(見積)
+    static List<String> TARGET_FIELDS = new List<String>{
+         'Name'
+        ,'Account__c'
+        ,'Status__c'
+        ,'MitsumoriYukokikan__c'
+        ,'MitusmoriNenGetsu__c'
+    };
+    
+    // 抽出対象となるフィールドリスト(見積明細)
+    // 参照関係の項目取得（Shohin__c ⇒ Shohin__r）
+    static List<String> TARGET_FIELDS2 = new List<String>{
+         'id'
+        ,'Kingaku__c'
+        ,'Suryo__c'
+        ,'Tanka__c'
+        ,'Shohin__r.ShohinCode__c'
+    };
+    
+    // コンストラクタ
+    public MitsumoriDetailController(){
+        // 一覧画面からの値を受け取る
+        this.mitsumoriId = ApexPages.currentPage().getParameters().get('targetId');
+        System.debug('[MitsumoriDetailController:mitsumoriId] ' + mitsumoriId);
+        // 初期化処理
+        init(); 
+        if(this.mitsumoriId != null){
+            // 見積詳細表示する場合
+            updateFlag = true;
+            // 見積詳細表示
+            displayMitsumoriMeisai();
+        }
+        // 画面上に固定で10行表示
+        // ページの切り替え機能などを未実装
+        Integer size = mitsumoriMeisais.size();
+   		for(Integer i = size; i<=10 ; i++) {
+        	mitsumoriMeisais.add(new MitsumoriMeisai__c());
+        }
+    }
+    
+    /**
+     * 初期化処理
+     */
+    public void init(){
+        updateFlag = false;
+        this.mitsumori = new Mitsumori__c();
+        this.mitsumoris = new List<Mitsumori__c>();
+        this.mitsumoriMeisais = new List<MitsumoriMeisai__c>();
+    }
+
+    /**
+     * 表示処理
+     */
+    private PageReference displayMitsumoriMeisai() {
+        // 検索条件からSOQLを作成
+        String soqlQuery = getSoqlQuery();
+        System.debug('[display:soql] ' + soqlQuery);
+
+        try{
+            mitsumoris = database.query(soqlQuery);
+            // 複数の場合を考慮しない
+            if(mitsumoris.size() == 1){
+                mitsumori = mitsumoris[0];
+                // 子の取得(主従関係：子リレーション名__r)
+                mitsumoriMeisais.addAll(mitsumori.MSToMitsumori__r); 
+            }
+        }catch(DmlException e){
+            ApexPages.addMessages(e);
+        }catch(Exception e){
+            ApexPages.addMessages(e);
+        }
+        return null;
+    }
+    
+    /**
+     * 見積詳細内容抽出
+     * Limit 1 になっていますが、複数親存在する場合未考慮
+     */
+     public String getSoqlQuery(){
+        // 親＋関連する子の取得
+		// mitsumoris = [SELECT Name,Account__c,Status__c,MitusmoriNenGetsu__c,
+		//                MitsumoriYukokikan__c,
+		//                (SELECT id, Kingaku__c,Suryo__c,
+		//                Tanka__c,Shohin__r.ShohinCode__c FROM MSToMitsumori__r) 
+		//               FROM Mitsumori__c WHERE id=:mitsumoriId LIMIT 1]; 
+            
+     	List<String> param = new String[]{ getFieldList(), getChildFieldList(), getWhere() };
+		return String.format('SELECT {0}, (SELECT {1} FROM MSToMitsumori__r) FROM Mitsumori__c {2} LIMIT 1', param);
+	}
+    
+    // SELECT対象フィールド(見積項目)
+    private String getFieldList(){
+        return String.join(TARGET_FIELDS, ',');
+    }
+    
+    // SELECT対象フィールド(見積詳細項目)
+    private String getChildFieldList(){
+        return String.join(TARGET_FIELDS2, ',');
+    }
+    
+    // WHERE句作成
+    private String getWhere(){
+        List<String> param = new String[]{ };
+
+        // id
+		param.add('id = \'' + mitsumoriId + '\'');
+        
+		return 'WHERE ' + String.join(param, ',');
+   }
+    
+    /**
+     * 保存ボタン処理
+     */
+    public PageReference saveItem() {
+        Mitsumori__c[] mitsumoriList = new List<Mitsumori__c>();
+        MitsumoriMeisai__c[] meisaiList = new List<MitsumoriMeisai__c>();
+        
+        /*
+         * このメソッドには共通処理としてのメソッドを作成したほうがよいですが、
+         * 勉強するために、違い定義方法、やり方を実装しております。
+		*/
+        /*
+         * ここに入力内容チェックロジックを入れるべき。 
+		*/
+        System.debug('[saveItem.updateFlag] ' + updateFlag);
+        if(updateFlag){
+            // 更新ー見積明細
+            for(MitsumoriMeisai__c item : mitsumoriMeisais){
+                System.debug('[saveItem.item] ' + item.id);
+                if(item.id != null){
+                    //更新
+                    List<MitsumoriMeisai__c> unit = [SELECT Name 
+                              FROM MitsumoriMeisai__c
+                              WHERE id = :item.id
+                              LIMIT 1];
+                    for(MitsumoriMeisai__c unitItem : unit){
+                        unitItem.Suryo__c = item.Suryo__c;
+                    	unitItem.Tanka__c = item.Tanka__c;
+                    	unitItem.Kingaku__c = item.Kingaku__c;
+                    	System.debug('[unitItem.Suryo__c] ' + unitItem.Suryo__c);
+                    	System.debug('[unitItem.Tanka__c] ' + unitItem.Tanka__c);
+                    	System.debug('[unitItem.Kingaku__c] ' + unitItem.Kingaku__c);
+                    	meisaiList.add(unitItem);
+                    }
+                } else {
+                    // 新規
+                    System.debug('[item.Shohin__c] ' + item.Shohin__c);
+                    System.debug('[mitsumori.Id] ' + mitsumori.Id);
+                    if(item.Shohin__c != null){
+                    	MitsumoriMeisai__c insertItem = new MitsumoriMeisai__c();
+                        
+                    	insertItem.Suryo__c = item.Suryo__c;
+                    	insertItem.Tanka__c = item.Tanka__c;
+                    	insertItem.Kingaku__c = item.Kingaku__c;
+                        System.debug('[insertItem.Suryo__c] ' + insertItem.Suryo__c);
+                        insertItem.MitsumoriMeisai__c = mitsumori.Id;
+                        insertItem.Shohin__c = item.Shohin__c;
+	  					meisaiList.add(insertItem);
+                    }
+				}
+            }
+            // 更新ー見積
+            List<Mitsumori__c> queriedList = [SELECT Name,Status__c
+                              FROM Mitsumori__c
+                              WHERE id = :mitsumoriId
+                              LIMIT 1];
+            for (Mitsumori__c queriedItem : queriedList) {
+                queriedItem.Account__c = mitsumori.Account__c;
+            	queriedItem.MitsumoriYukokikan__c = mitsumori.MitsumoriYukokikan__c;
+            	queriedItem.MitusmoriNenGetsu__c = mitsumori.MitusmoriNenGetsu__c;
+            	queriedItem.Status__c = mitsumori.Status__c;
+                System.debug('[queriedItem.Status__c] ' + queriedItem.Status__c);
+            	mitsumoriList.add(queriedItem);
+            }
+            try {
+            	upsert meisaiList;
+    			upsert mitsumoriList;
+        		ApexPages.addMessage(new ApexPages.Message(ApexPages.Severity.INFO, '保存しました。', ''));
+			} catch (DmlException e) {
+    			ApexPages.addMessages(e);
+			}
+        } else {
+            // 新規ー見積
+            Mitsumori__c insertItem = new Mitsumori__c(
+            			Account__c = mitsumori.Account__c,
+            			MitsumoriYukokikan__c = mitsumori.MitsumoriYukokikan__c,
+            			MitusmoriNenGetsu__c = mitsumori.MitusmoriNenGetsu__c,
+                        Status__c = mitsumori.Status__c);
+            insert insertItem;
+            // Get this ID.
+            ID mitsuID = insertItem.ID;
+            
+			// 新規ー見積明細
+			for(MitsumoriMeisai__c item : mitsumoriMeisais){
+                System.debug('[item.Shohin__c] ' + item.Shohin__c);
+                if(item.Shohin__c != null){
+					MitsumoriMeisai__c insertMeisaiItem = new MitsumoriMeisai__c(
+                    	Suryo__c = item.Suryo__c,
+                    	Tanka__c = item.Tanka__c,
+                    	Kingaku__c = item.Kingaku__c,
+                    	MitsumoriMeisai__c = mitsuID,
+                    	Shohin__c = item.Shohin__c);
+	  				meisaiList.add(insertMeisaiItem);
+                }
+            }
+            if(meisaiList.size() > 0){
+            	insert meisaiList;
+            }
+            ApexPages.addMessage(new ApexPages.Message(ApexPages.Severity.INFO, '保存しました。', ''));
+        }
+        return null;
+    }
+    
+    /**
+     * 一覧へ戻すボタン処理
+     */
+    public PageReference backToList() {
+        return Page.MitsumoriSearch;
+    }
+}
